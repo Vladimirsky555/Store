@@ -1,0 +1,102 @@
+
+Для подключения QFrame в припаркованное окно главного окна (вариант):
+ * 1) Создать виджет, унаследованный от QFrame
+ * 2) Убрать из деструктора delete *ui
+ * 3) Заменить указатель *ui на объект ui
+ * 4) Перенести строчку #include "ui_filter.h" в заголовочный файл
+ 
+ Но как оказалось, то это не обязательно. Достаточно создать обычный виджет, унаследованный от QFrame, но не забыть в начале файла filter.h строчки (чтобы не переносить строчку #include "ui_filter.h" в заголовочный файл):
+ namespace Ui {
+ class Filter;
+ }
+
+И в конструкторе класса Filter 
+Filter::Filter(QWidget *parent) :
+    QFrame(parent),
+    ui(new Ui::Filter)//создаём экземпляр класса Filter
+{
+    ui->setupUi(this);
+
+    ui->btnFilter->setDefaultAction(ui->actionApplyFilter);
+}
+ 
+ Фильтры бывают двух типов:
+ 1) Фильтр, который реагирует на каждое нажатие
+ 2) Фильтр, который применяется по нажатию на кнопку применить
+ 
+Как сделать так чтобы фильр работал:
+1) Создадим сигнал, который будет отправлять объект
+signals:
+     void apply_filter(QObject *pFilter);
+	 
+2) Создадим свойства объекта Filter
+    Q_PROPERTY(QVariant author READ author)
+    Q_PROPERTY(QVariant title  READ title)
+    Q_PROPERTY(QVariant year   READ year)
+	
+3) Создадим методы, которые снимают данные с полей ввода:
+     QVariant author()const;
+     QVariant title()const;
+     QVariant year()const;
+	 
+ Реализация:
+ QVariant Filter::author() const
+{
+    QString T = ui->edtAuthor->text().simplified();
+    return T.isEmpty() ? QVariant() : T;
+}
+
+QVariant Filter::title() const
+{
+    QString T = ui->edtTitle->text().simplified();
+    return T.isEmpty() ? QVariant() : T;
+}
+
+QVariant Filter::year() const
+{
+    QString T = ui->edtYear->text().simplified();
+    if(T.isEmpty()) return QVariant();
+    bool OK;
+    int Result = T.toInt(&OK);
+    return OK ? Result : QVariant();
+}
+
+4) Создадим методы на кнопки:
+private slots:
+     void apply_filter_triggered();//передаёт указатель на объект, содержащий фильтр
+     void clear_filter_triggered();
+	 
+ Реализация:
+ void Filter::apply_filter_triggered()
+{
+    emit apply_filter(this);
+}
+
+void Filter::clear_filter_triggered()
+{
+    ui->edtAuthor->clear();
+    ui->edtTitle->clear();
+    ui->edtYear->clear();
+}
+Одна кнопка опередаёт указатель на объект, содержащий фильтр
+Вторая кнопка очищает поля ввода
+
+5) В конструкторе класса свяжем события с кнопками:
+Filter::Filter(QWidget *parent) :
+    QFrame(parent),
+    ui(new Ui::Filter)
+{
+    ui->setupUi(this);
+
+    ui->btnFilter->setDefaultAction(ui->actionApplyFilter);
+    ui->btnClear->setDefaultAction(ui->actionClearFilter);
+    
+    connect(ui->actionApplyFilter, SIGNAL(triggered()),
+            this, SLOT(apply_filter_triggered()));
+
+    connect(ui->actionClearFilter, SIGNAL(triggered()),
+            this, SLOT(clear_filter_triggered()));
+}
+
+
+ 

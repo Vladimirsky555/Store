@@ -1,0 +1,66 @@
+Задача: Создать события в модели и вызывать их из представления
+
+1) Создаём события и список событий в модели
+    QAction *actNewRow;
+    QAction *actDeleteRow;
+    QAction *actSaveAll;
+    QAction *actRestoreAll;
+	
+2) Создадим слоты в модели:
+protected slots:
+    void on_save_all();
+    void on_restore_all();
+    void on_delete_row();
+    void on_new_row();
+
+    //Список экшенов для предоставления доступа представлению
+public:
+    QList<QAction*> allActions;
+	
+3) Реализация событий в конструкторе модели:
+	 {
+        QAction *A = actDeleteRow = new QAction(this);
+        A->setText(tr("Delete"));
+        connect(A, SIGNAL(triggered()), this, SLOT(on_delete_row()));
+        allActions << A;
+    }{
+        QAction *A = actNewRow = new QAction(this);
+        A->setText(tr("New"));
+        connect(A, SIGNAL(triggered()), this, SLOT(on_new_row()));
+        allActions << A;
+    }{
+        QAction *A = actSaveAll = new QAction(this);
+        A->setText(tr("Save"));
+        connect(A, SIGNAL(triggered()), this, SLOT(on_save_all()));
+        allActions << A;
+    }{
+        QAction *A = actRestoreAll = new QAction(this);
+        A->setText(tr("Restore"));
+        connect(A, SIGNAL(triggered()), this, SLOT(on_restore_all()));
+        allActions << A;
+    }
+
+4) Реализация слотов в модели:
+void BooksModel_EditonServer::on_save_all()
+{
+    qDebug() << "on_save_all";
+}
+
+void BooksModel_EditonServer::on_restore_all()
+{
+    qDebug() << "on_restore_all";
+}
+
+void BooksModel_EditonServer::on_delete_row()
+{
+    qDebug() << "on_delete_row";
+}
+
+void BooksModel_EditonServer::on_new_row()
+{
+    qDebug() << "on_new_row";
+}
+
+5) В представлении свяжем представление с событиями:
+    addActions(M->allActions);
+    setContextMenuPolicy(Qt::ActionsContextMenu);

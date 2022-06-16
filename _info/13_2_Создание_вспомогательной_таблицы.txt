@@ -1,0 +1,125 @@
+Задача: Имея модель и представление для отображения данных QSqlQueryModel, создать модель для редактирования данных. Для этого продублируем нашу модель и отредактируем её.
+Модель для редактирования унаследуем от QSqlTableModel. Методы и переменные предыдущей модели пока оставим, чтобы отредактировать. 
+
+QSqlTableModel используется для редактирования таблицы, а это значит, что фильтры мы не налагаем на таблицу. 
+
+Модель QSqlTableModel прикручена к конкретной таблице. Редактировать её напрямую плохая идея:
+
+1) Грязное чтение. Один пользователь исправил данные (например номер паспорта). Но не до конца. А другой пользователь считал эти данные, не до конца отредактированные.
+2) Огромное количество данных
+
+Именно поэтому нам нужна временная таблица. Выборку, которую мы собираемся редактировать, записываем во временную таблицу. Далее мы открываем временную таблицу и работаем с ней как обычно.
+Временная таблица применяется к конкретному подключению. 
+
+Схема - подраздел в базе данных. 
+Временная таблица сбрасывается когда мы отключаемся от базы. Поэтому перед созданием новой временной таблицы необходимо сделать следующее: 
+
+    * Сначала отключаем модель от таблицы и уничтожаем предыдущую временную таблицу, если она была
+	//отключаем модель от таблицы
+    setTable(QString());
+
+    {//Чтобы всё нормально работало, уничтожаем предыдущую временную таблицу
+
+        QSqlQuery DROP;
+        bool OK = DROP.exec("drop table if exists my_books;");
+        if(!OK){
+            REPORT_ERROR(DROP);
+            return;
+        }
+    }//конец блока уничтожения предыдущей временной таблицы
+	
+	* Далее создаём временную таблицу:
+	{//Создаём временную таблицу вручную (от сохи)(дедовский способ)
+        QSqlQuery CREATE;
+        bool OK = CREATE.exec(
+                    "create temp table my_books   (  \n"
+                    "    iid bigint primary key,     \n" //не serial, not null отсутствует
+                    "    rid_catalogue bigint,       \n"
+                    "    author text,                \n"
+                    "    title text,                 \n"
+                    "    year int,                   \n"
+                    "    location text,              \n"
+                    "    pablisher text,             \n"
+                    "    pages int,                  \n"
+                    "    annote text,                \n"
+                    "    rid_status bigint,          \n"
+                    "    status_title text,          \n"
+                    "    acomment text               \n"
+                    "    ) ;                         \n"
+                    );
+        if(!OK){
+            REPORT_ERROR(CREATE);
+            return;
+        }
+    }//конец блока создания временной таблицы
+	
+	* Далее в новую таблицу вставляем выборку либо по нажатию на каталожный элемент, 
+	  либо результат фильтрации:
+	    {//Блок запроса
+        QString queryText =
+                "INSERT INTO my_books ("
+                "    iid,                        \n"//iid копируем, не автогенерится
+                "    rid_catalogue,              \n"
+                "    author,                     \n"
+                "    title,                      \n"
+                "    year,                       \n"
+                "    location,                   \n"
+                "    pablisher,                  \n"
+                "    pages,                      \n"
+                "    annote,                     \n"
+                "    rid_status,                 \n"
+                "    status_title,               \n"
+                "    acomment                    \n"
+                ")                               \n"
+                " SELECT                         \n"
+                "    b.iid,                      \n"
+                "    b.rid_catalogue,            \n"
+                "    b.author,                   \n"
+                "    b.title,                    \n"
+                "    b.year,                     \n"
+                "    b.location,                 \n"
+                "    b.pablisher,                \n"
+                "    b.pages,                    \n"
+                "    b.annote,                   \n"
+                "    b.rid_status,               \n"
+                "    s.title as status_title,    \n"
+                "    b.acomment                  \n"
+                " FROM books b                   \n"
+                " left outer join status s       \n"
+                "     on b.rid_status = s.iid    \n"
+                " WHERE b.rid_catalogue = :CID   \n";
+
+        if(fAuthor.isValid())
+            queryText += "     and b.author ~ :AUTHOR   \n";
+        if(fTitle.isValid())
+            queryText += "     and b.title ~ :TITLE     \n";
+        if(fYear.isValid())
+            queryText += "     and b.year = :YEAR       \n";
+        queryText += "   ;                              \n";
+
+        //Выполняем запрос
+        QSqlQuery qry;
+        qry.prepare(queryText);
+
+        qry.bindValue(":CID", fCatId);
+        if(fAuthor.isValid())
+            qry.bindValue(":AUTHOR", "^"+fAuthor.toString());
+        if(fTitle.isValid())
+            qry.bindValue(":TITLE", fTitle);
+        if(fYear.isValid())
+            qry.bindValue(":YEAR", fYear);
+
+        if(!qry.exec()){
+            REPORT_ERROR(qry);
+            return;
+        }
+    }//Конец блока запроса
+	
+	* Устанавливаем таблицу
+	setTable("my_books");
+
+    if(!select()){;//работает как exec
+        qCritical() << "Error selecting!";
+    } else {
+        qDebug() << "Selected seccesfully!";
+    }

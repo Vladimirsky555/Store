@@ -1,0 +1,12 @@
+enum QSqlTableModel::EditStrategy
+
+data() - считывает данные из модели
+setData() -устанавливает данные в модель
+
+1) QSqlTableModel::OnFieldChange - Каждое поле тут же полетело в базу 
+2) QSqlTableModel::OnRowChange - Каждое отдельное поле не летит в базу, а в базу летит только измененная строчка (при сдвиге на другую строчку)
+3) QSqlTableModel::OnManualSubmit - В базу данных автоматом ничего не вызывается, но только функция submitAll, которая является слотом
+
+
+В нашем случае лучше выбрать пункт QSqlTableModel::OnFieldChange, так как мы редактируем временную таблицу.
+Также мы можем выбрать QSqlTableModel::OnRowChange

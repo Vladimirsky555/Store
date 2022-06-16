@@ -1,0 +1,20 @@
+* Запрет на редактирование полей виртуальная функция:
+  Qt::ItemFlags flags(const QModelIndex &I) const;
+
+  Реализация: 
+Qt::ItemFlags BooksModel_EditonServer::flags(const QModelIndex &I) const
+{
+    Qt::ItemFlags Result =  Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+    if(I.column() != 0 && I.column() != 9 && I.column() != 10)
+    if(I.column() != 0)
+        Result = Result | Qt::ItemIsEditable;//редактируем колонки, кроме 0,9,10
+
+    return Result;
+
+
+    //Qt::NoItemFlags; - таблица не реагирует на клики
+    //Qt::ItemIsEnabled; - на элемент можно установить фокус ввода,
+    //но отредактировать или выбрать его не получится
+    //Qt::ItemIsEnabled | Qt::ItemIsSelectable; - можно установить фокус ввода и даже выбрать
+    //но отредактировать не получится
+}

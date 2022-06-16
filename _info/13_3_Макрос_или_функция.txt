@@ -1,0 +1,57 @@
+1 ПРИМЕР:
+//Один из вариантов в виде макроса
+#define REPORT_ERROR(query)                               \
+   qDebug() << query.executedQuery();                     \    
+   qCritical() << query.lastError().databaseText().toUtf8().data();  \
+
+//закрываем в анонимное пространство имён, чтобы невозмоно
+//было использовать эту функцию в других файлах
+//Анонимное пространство имён образует блок, в отличие от обычного
+namespace {
+void REPORT_ERROR(QSqlQuery &QUERY){
+    qDebug() << QUERY.executedQuery();
+    qCritical() << QUERY.lastError().databaseText().toUtf8().data();
+  }
+}
+
+   QSqlQuery DROP;
+        bool OK = DROP.exec("drop table if exists my_books;");
+        if(!OK){
+            REPORT_ERROR(DROP);
+            return;
+        }		
+		
+    if(!OK){
+      REPORT_ERROR(CREATE);
+      return;
+    }
+
+        if(!qry.exec()){
+            REPORT_ERROR(qry);
+            return;
+        }
+
+
+2 ПРИМЕР:
+#define DATA_PTR(D,I,VALUE)                                   \
+    Data *D = (Data*)(I.internalPointer());                   \
+    if(!D) return VALUE
+
+	
+	//DATA_PTR(D, I, ); //вместо нижних 2-х строчек
+	Data *D = (Data*)I.internalPointer();
+    if(!D)return;
+	
+	//DATA_PTR(D, index, QModelIndex());
+    Data *D = (Data*)(parentI.internalPointer());
+    if(!D) return QModelIndex();
+	
+	
+3 ПРИМЕР: 
+#define DATE_STR(DATE)                                         \
+    (DATE.isValid() ? DATE.toString("dd.MM.yyyy") : QString()) \
+	
+  //case 2: return DATE_STR(D->getFrom());
+  //case 3: return DATE_STR (D->getTo());
+    case 2: return D->getFrom().isValid() ? D->getFrom().toString("dd.MM.yyyy") : QString();
+    case 3: return D->getTo().isValid() ? D->getTo().toString("dd.MM.yyyy") : QString();

@@ -1,0 +1,84 @@
+Задача: У нас 2 таблицы, одна иерархическая, другая линейная. Нам нужно по id выдавать линейную таблицу по клику на элемент иерархической. В линейной таблице есть поле с id родителя из иерархической.
+
+1. В представлении иерархической таблицы открываем виртуальный метод, который есть у всех представлений
+protected slots:
+    void currentChanged(const QModelIndex &current, const QModelIndex &previous);
+
+2. В представлении иерархической таблицы создаём сигнал, который будет испускаться по клику на элемент
+signals:
+    void item_selected(QVariant id);
+	
+3. Распишем виртуальный метод. Он по клику передаёт id элемента всем кто на этот сигнал подписан
+
+void ColumnView::currentChanged(const QModelIndex &current, const QModelIndex &previous)
+{
+    //Вызываем функцию базового класса
+    QColumnView::currentChanged(current, previous);
+
+    if(!current.isValid()){
+        emit item_selected(QVariant());
+        return;
+    }
+
+    Data *D = (Data*)(current.internalPointer());
+    if(!D) {
+        emit item_selected(QVariant());
+        return;
+    } else {
+        emit item_selected(D->getId());
+    }
+}
+
+4. В модели линейной таблицы создадим слот, который подпишем на сигнал
+public slots:
+    void cat_item_selected(QVariant Id);
+	
+ * реализация:
+ 
+ void BooksModel::cat_item_selected(QVariant Id)
+{
+    if(Id.isValid()){
+        QSqlQuery qry;
+        qry.prepare(
+                    "SELECT                         \n"
+                    "    iid,                       \n"
+                    "    rid_catalogue,             \n"
+                    "    author,                    \n"
+                    "    title,                     \n"
+                    "    year,                      \n"
+                    "    location,                  \n"
+                    "    pablisher,                 \n"
+                    "    pages,                     \n"
+                    "    annote,                    \n"
+                    "    rid_status,                \n"
+                    "    acomment                   \n"
+                    "FROM books                     \n"
+                    "WHERE rid_catalogue = :CID  ;  \n"
+                    );
+        qry.bindValue(":CID", Id);
+        if(!qry.exec()){//открываем курсор
+            qCritical() << qry.lastError().databaseText().toUtf8().data();
+        }
+        setQuery(qry);//всё что нужно для отражения данных в представлении
+        //в данном типе модели
+    }
+}
+
+5. В классе основного окна mainwindow.cpp свяжем слот с сигналом.
+setWindowTitle("Список");
+
+    BooksView *B = new BooksView(this);
+    setCentralWidget(B);
+
+    ColumnView *W = NULL;
+
+    {
+        QDockWidget *D = new QDockWidget(this);
+        D->setWindowTitle(tr("Каталог"));
+        W = new ColumnView(D);
+        D->setWidget(W);
+        addDockWidget(Qt::TopDockWidgetArea, D);
+    }
+
+    connect(W, SIGNAL(item_selected(QVariant)),
+            B->model(), SLOT(cat_item_selected(QVariant)));

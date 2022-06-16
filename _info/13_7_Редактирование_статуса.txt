@@ -1,0 +1,206 @@
+Задача: Есть линейная таблица со списком книг и табличка из 3-х элементов, два поля из которых присутствуют в таблице книг. Нужно отредактировать статус в таблице с книгами. 
+
+* Флаги позволяют редактировать статусы
+Qt::ItemFlags BooksModel_EditonServer::flags(const QModelIndex &I) const
+{
+    Qt::ItemFlags Result = Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+    if(I.column() != 0)
+        Result = Result | Qt::ItemIsEditable;//редактируем колонки, кроме 0,1,9,10
+
+    return Result;
+}
+
+* Настроим виртуальную функцию QVariant data(const QModelIndex &I, int role) const;
+  чтобы она подставляла число, когда мы пытаемся отредактировать 10 колонку с текстом статуса (10 колонка текст, 9 колонка число)
+  
+  QVariant BooksModel_EditonServer::data(const QModelIndex &I, int role) const
+{
+    if(!I.isValid())return QSqlTableModel::data(I,role);
+    if(role != Qt::EditRole) return QSqlTableModel::data(I,role);
+    if(I.column() != 10) return QSqlTableModel::data(I,role);
+
+    return QSqlTableModel::data(index(I.row(),9),role);
+}
+
+Теперь по клику на текст, появляется число. Но вставить мы можем любое. 
+
+* Настроим виртуальную функцию bool setData(const QModelIndex &I, const QVariant &val, int role);
+  чтобы редактировать статус
+  
+  //Устанавливает данные в модель
+bool BooksModel_EditonServer::setData(const QModelIndex &I, const QVariant &val, int role)
+{
+    if(!I.isValid())return QSqlTableModel::setData(I,role);
+    if(role != Qt::EditRole) return QSqlTableModel::setData(I,val,role);
+    if(I.column() != 10) return QSqlTableModel::setData(I,val,role);
+    
+    bool Result = QSqlTableModel::setData(index(I.row(),9), val, role);
+    if(val.isValid()){
+        //????
+    } else {
+        Result = QSqlTableModel::setData(I, QString(), role);
+    }
+
+    return Result;
+}
+
+Теперь мы можем редактировать статус в в 10-м столбце, но текст не меняется согласно статусу
+
+* Загружаем список всех статусов из базы и сохраняем в модели как справочник
+  1) Используем для этого встроенный тип данных Map
+  Для этого вводим в модель новую переменную:
+  
+  QMap<int, QString> allStatus;
+  
+  2) В конструкторе модели:
+  
+    {//Загружаем все статусы из базы
+         QSqlQuery QUERY;
+         QUERY.prepare("select iid, title from status");
+         bool OK = QUERY.exec();
+         if(!OK){
+             REPORT_ERROR(QUERY);
+             return;
+         } else {
+             while(QUERY.next()){
+                 int id = QUERY.value("iid").toInt();
+                 allStatus[id] = QUERY.value("title").toString();
+             }
+         }
+     }
+	 
+	 Хотя можно было и так:
+	     {
+            allStatus[-1] = "Выдано";
+            allStatus[-2] = "В переплёте";
+            allStatus[-3] = "Зарезервировано";
+         }
+
+  * Теперь необходимо редактируя 10-ю текстовую колонку числом, менять текст в этой колонке. Попутно меняется 9-я колонка. 
+  
+bool BooksModel_EditonServer::setData(const QModelIndex &I, const QVariant &val, int role)
+{
+    if(!I.isValid())return QSqlTableModel::setData(I,role);
+    if(role != Qt::EditRole) return QSqlTableModel::setData(I,val,role);
+    if(I.column() != 10) return QSqlTableModel::setData(I,val,role);
+    bool Result = true;
+
+    //Всё это только для 10-й колонки
+    if(val.isValid()){//Валидный val
+        bool OK;
+        int status_id = val.toInt(&OK);
+        if(!OK){//Если число некорректное
+            qWarning() << "Invalid Status - " << val;
+            return false;
+        } else if(!allStatus.contains(status_id)){
+            qWarning() << "Invalid Status - " << val;
+            return false;
+        } else {
+            Result |= QSqlTableModel::setData(index(I.row(),9), val, role);
+            Result |= QSqlTableModel::setData(I, allStatus[status_id], role);
+        }
+    } else {//Невалидный val
+        Result |= QSqlTableModel::setData(index(I.row(),9), QVariant(), role);
+        Result |= QSqlTableModel::setData(I, QString(), role);
+    }
+
+    return Result;
+}
+
+  
+  * Следующая задача - выпадающий список для выбора статуса. 
+    Для этого нужен делегат.
+	Делегат не является виджетом. Он нужен:
+	1) если нас не устраивает стандартная отрисовка
+	2) если нас не устраивает стандартное редактирование.
+	Обязанность делегата - создание правильного виджета редактирования или отрисовки. 
+	
+	Переопределяем виртуальные функции: 
+	// QAbstractItemDelegate interface
+public:
+    //создаёт редактор
+    QWidget *createEditor(QWidget *parent,const QStyleOptionViewItem &option,const QModelIndex &index) const;
+
+    //переносит данные с модели на редактор
+    void setEditorData(QWidget *editor, const QModelIndex &I) const;
+
+    //перенос данных с редактора в модель
+    void setModelData(QWidget *editor, QAbstractItemModel *model,const QModelIndex &I) const;
+
+    //зона на которой рисоватать
+    void paint(QPainter *painter,const QStyleOptionViewItem &option,const QModelIndex &index) const;
+	
+	Реализация:
+	//Конструктор делегата
+StatusDelegate::StatusDelegate(QObject *parent, QMap<int, QString> allStatus)
+{
+    this->allStatus = allStatus;
+}
+
+QWidget *StatusDelegate::createEditor(QWidget *parent, const QStyleOptionViewItem &option, const QModelIndex &index) const
+{
+    QComboBox *cbx = new QComboBox(parent);
+    QMapIterator<int,QString> K(allStatus);
+    //cbx->addItem(QString(), QVariant());//чтобы не выбирать никакого статуса
+    while(K.hasNext()){
+        K.next();
+        cbx->addItem(K.value(), K.key());//наименование и идентификатор статуса
+    }
+    return cbx;
+}
+
+//переносит данные с модели на редактор
+void StatusDelegate::setEditorData(QWidget *editor, const QModelIndex &I) const
+{
+    QComboBox *cbx = qobject_cast<QComboBox*>(editor);
+    if(!cbx) return;
+    
+    QVariant IdStatus = I.data(Qt::EditRole);
+    
+    if(!IdStatus.isValid()){
+        cbx->setCurrentIndex(0);
+        return;
+    } 
+    
+    //Нулевой элемент уже просчитали
+    for(int i = 1; i < cbx->count(); i++){
+        if(cbx->itemData(i) == IdStatus){
+            cbx->setCurrentIndex(i);
+            break;
+        }
+    }
+    
+}
+
+//перенос данных с редактора в модель
+void StatusDelegate::setModelData(QWidget *editor, QAbstractItemModel *model,
+                                  const QModelIndex &I) const
+{
+    //Преобразовываем эдитор к комбобоксу
+    QComboBox *cbx = qobject_cast<QComboBox*>(editor);
+    if(!cbx) return;
+
+    model->setData(I, cbx->currentData(), Qt::EditRole);
+}
+
+//отрисовка
+void StatusDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
+                           const QModelIndex &I) const
+{
+    QItemDelegate::paint(painter,option,I);
+    if(I.data(Qt::EditRole) != -2) return;
+
+    painter->setBrush(QBrush(QColor("black"), Qt::DiagCrossPattern));
+    painter->setPen(Qt::NoPen);
+    painter->drawRect(option.rect);
+}
+
+ * Установим делегат в представление (не в модель):
+ Делегат можно установить
+ - для строчки
+ - для колонки
+ - для ячейки
+ 
+ setItemDelegateForColumn(10, new StatusDelegate(this, M->allStatus));
+ 
+ M->allStatus - это коллекция QMap<int, QString> allStatus;, который мы получили из базы данных status

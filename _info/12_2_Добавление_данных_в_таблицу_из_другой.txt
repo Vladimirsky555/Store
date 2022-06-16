@@ -1,0 +1,89 @@
+Задача: У нас 2 таблицы, одна иерархическая (catalogue), другая линейная (books). Существует также 3-я таблица (status), состоящая из 3-х элементов, это статусы. Нужно чтобы вместо числа в таблице books появлялся текст.
+
+* Исходный код метода, который выбрасывает по id данные:
+void BooksModel::cat_item_selected(QVariant Id)
+{
+    if(Id.isValid()){
+        QSqlQuery qry;
+        qry.prepare(
+                    "SELECT                         \n"
+                    "    iid,                       \n"
+                    "    rid_catalogue,             \n"
+                    "    author,                    \n"
+                    "    title,                     \n"
+                    "    year,                      \n"
+                    "    location,                  \n"
+                    "    pablisher,                 \n"
+                    "    pages,                     \n"
+                    "    annote,                    \n"
+                    "    rid_status,                \n"
+                    "    acomment                   \n"
+                    "FROM books                     \n"
+                    "WHERE rid_catalogue = :CID  ;  \n"
+                    );
+        qry.bindValue(":CID", Id);
+        if(!qry.exec()){//открываем курсор
+            qCritical() << qry.lastError().databaseText().toUtf8().data();
+        }
+        setQuery(qry);//всё что нужно для отражения данных в представлении
+        //в данном типе модели
+    }
+
+    return;
+}
+
+* Зададим таблице псевдоним b
+  "SELECT                         \n"
+        "    b.iid,                       \n"
+        "    b.rid_catalogue,             \n"
+        "    b.author,                    \n"
+        "    b.title,                     \n"
+        "    b.year,                      \n"
+        "    b.location,                  \n"
+        "    b.pablisher,                 \n"
+        "    b.pages,                     \n"
+        "    b.annote,                    \n"
+        "    b.rid_status,                \n"
+        "    b.acomment                   \n"
+        "FROM books b                    \n"
+        "WHERE b.rid_catalogue = :CID  ;  \n"
+Ничего не изменится
+
+* Конечный вариант
+void BooksModel::cat_item_selected(QVariant Id)
+{
+    if(Id.isValid()){
+        QSqlQuery qry;
+        qry.prepare(
+                    "SELECT                           \n"
+                    "    b.iid,                       \n"
+                    "    b.rid_catalogue,             \n"
+                    "    b.author,                    \n"
+                    "    b.title,                     \n"
+                    "    b.year,                      \n"
+                    "    b.location,                  \n"
+                    "    b.pablisher,                 \n"
+                    "    b.pages,                     \n"
+                    "    b.annote,                    \n"
+                    "    b.rid_status,                \n"
+                    "    s.title,                     \n"
+                    "    b.acomment                   \n"
+                    "FROM books b                     \n"
+                    "left outer join status s         \n"
+                    "on b.rid_status = s.iid          \n"
+                    "WHERE b.rid_catalogue = :CID  ;  \n"
+                    );
+        qry.bindValue(":CID", Id);
+        if(!qry.exec()){//открываем курсор
+            qCritical() << qry.lastError().databaseText().toUtf8().data();
+        }
+        setQuery(qry);//всё что нужно для отражения данных в представлении
+        //в данном типе модели
+    }
+
+    return;
+}
+
+левая таблица полностью, а из правой только статус
+left outer join status s - 
+on b.rid_status = s.iid       

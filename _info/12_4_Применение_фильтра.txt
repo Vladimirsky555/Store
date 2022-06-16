@@ -1,0 +1,102 @@
+1) Добавим в модель переменные:
+    QVariant fAuthor;
+    QVariant fTitle;
+    QVariant fYear;
+    QVariant fCatId;
+	
+2) Создаём слот для принятия свойств фильтра:
+public slots:
+    void apply_filter(QObject *F);
+	
+	Реализация:
+void BooksModel::apply_filter(QObject *F)
+{
+    //Мы пользуемся системой свойств Qt, нам начихать на структуру объекта
+    //Элементы динамической типизации
+    fAuthor = F->property("author");
+    fTitle =  F->property("title");
+    fYear =   F->property("year");
+
+    adjust_query();
+}
+
+3) Создаём дополнительную функцию:
+private:
+    void adjust_query();
+	
+	Реализация:
+	void BooksModel::adjust_query()
+{
+    QString queryText =
+            "SELECT                           \n"
+            "    b.iid,                       \n"
+            "    b.rid_catalogue,             \n"
+            "    b.author,                    \n"
+            "    b.title,                     \n"
+            "    b.year,                      \n"
+            "    b.location,                  \n"
+            "    b.pablisher,                 \n"
+            "    b.pages,                     \n"
+            "    b.annote,                    \n"
+            "    b.rid_status,                \n"
+            "    s.title,                     \n"
+            "    b.acomment                   \n"
+            "FROM books b                     \n"
+            "left outer join status s         \n"
+            "     on b.rid_status = s.iid     \n"
+            "WHERE b.rid_catalogue = :CID     \n";
+
+    if(fAuthor.isValid())
+        queryText += "     and b.author ~ :AUTHOR   \n";
+    if(fTitle.isValid())
+        queryText += "     and b.title ~ :TITLE     \n";
+    if(fYear.isValid())
+        queryText += "     and b.year = :YEAR       \n";
+    queryText += "   ;                              \n";
+
+
+    QSqlQuery qry;
+    qry.prepare(queryText);
+
+    qry.bindValue(":CID", fCatId);
+    if(fAuthor.isValid())
+        qry.bindValue(":AUTHOR", "^"+fAuthor.toString());
+    if(fTitle.isValid())
+        qry.bindValue(":TITLE", fTitle);
+    if(fYear.isValid())
+        qry.bindValue(":YEAR", fYear);
+
+    if(!qry.exec()){//открываем курсор
+        qCritical() << qry.lastError().databaseText().toUtf8().data();
+    }
+    setQuery(qry);//всё что нужно для отражения данных в представлении
+    //в данном типе модели
+}
+
+4) Тогда cat_item_selected(QVariant Id); будет выглядеть так:
+public slots:
+    void cat_item_selected(QVariant Id);
+	
+	Реализация:
+void BooksModel::cat_item_selected(QVariant Id)
+{
+    fCatId = Id;
+    adjust_query();
+}
+
+5) Связываем фильтр с моделью:
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow)
+{
+    .....
+
+    //Передаём данные от фильтра в модель с книгами
+    connect(F, SIGNAL(apply_filter(QObject*)),
+            B->model(), SLOT(apply_filter(QObject*)));
+}
+
+Фильтр использует динамическую типизацию. 
+Не важно какой объект, главное что у него есть свойства.
+Но ищет фильтр только из списка одного элемента. 

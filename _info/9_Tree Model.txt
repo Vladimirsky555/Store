@@ -1,0 +1,14 @@
+index(int row, int column, const QModelIndex &parentIndex) const
+index() - возвращает индекс элемента модели, заданной номером строки, столбца и индексом родительского элемента
+
+для создания индекса мы пользуемся функцией 
+createIndex() из модели
+
+указатель на экземпляр данных получаем с помощью функции internalPointer()
+
+[virtual] void QTableView::setRootIndex(const QModelIndex &index) - 
+устанавливает индекс как корневой
+
+
+
+
